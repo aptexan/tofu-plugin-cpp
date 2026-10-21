@@ -31,7 +31,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Proto file
 get_filename_component(proto_abs_path "proto/tofu-plugin.proto" ABSOLUTE)
 get_filename_component(proto_path "${proto_abs_path}" PATH)
-get_filename_component(proto_stem "${proto_abs_path}" STEM)
+get_filename_component(proto_stem "${proto_abs_path}" NAME_WE)
 
 # Generated sources
 set(proto_srcs "${CMAKE_CURRENT_BINARY_DIR}/${proto_stem}.pb.cc")
@@ -64,7 +64,7 @@ target_link_libraries(plugin_grpc_proto
   ${_PROTOBUF_LIBPROTOBUF})
 
   ## Tartget name (executable file) is same as the project name (tofu-plugin-cpp)
-  add_executable(${PROJECT_NAME} "tofu-plugin.cc")
+  add_executable(${PROJECT_NAME} "src/tofu-plugin.cpp")
   target_link_libraries(${PROJECT_NAME}
     plugin_grpc_proto
     absl::check

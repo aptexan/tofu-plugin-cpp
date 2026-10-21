@@ -32,7 +32,7 @@
 #ifdef BAZEL_BUILD
 #include "examples/protos/helloworld.grpc.pb.h"
 #else
-#include "helloworld.grpc.pb.h"
+#include "tofu-plugin.grpc.pb.h"
 #endif
 
 using grpc::Server;
@@ -49,7 +49,7 @@ ABSL_FLAG(uint16_t, port, 50051, "Server port for the service");
 class GreeterServiceImpl final : public Greeter::Service {
   Status SayHello(ServerContext* context, const HelloRequest* request,
                   HelloReply* reply) override {
-    std::string prefix("Hello-edited ");
+    std::string prefix("Hello-from-tofu-plugin ");
     reply->set_message(prefix + request->name());
     return Status::OK;
   }
