@@ -48,11 +48,27 @@ add_custom_command(
         "${proto_abs_path}"
       DEPENDS "${proto_abs_path}")
 
+# go-plugin controller service (lets Core ask the plugin to shut down)
+set(ctrl_srcs "${CMAKE_CURRENT_BINARY_DIR}/grpc_controller.pb.cc" "${CMAKE_CURRENT_BINARY_DIR}/grpc_controller.grpc.pb.cc")
+set(ctrl_hdrs "${CMAKE_CURRENT_BINARY_DIR}/grpc_controller.pb.h" "${CMAKE_CURRENT_BINARY_DIR}/grpc_controller.grpc.pb.h")
+get_filename_component(ctrl_abs_path "proto/grpc_controller.proto" ABSOLUTE)
+add_custom_command(
+      OUTPUT ${ctrl_srcs} ${ctrl_hdrs}
+      COMMAND ${_PROTOBUF_PROTOC}
+      ARGS --grpc_out "${CMAKE_CURRENT_BINARY_DIR}"
+        --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
+        -I "${proto_path}"
+        --plugin=protoc-gen-grpc="${_GRPC_CPP_PLUGIN_EXECUTABLE}"
+        "${ctrl_abs_path}"
+      DEPENDS "${ctrl_abs_path}")
+
 # Include generated *.pb.h files
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 # plugin_grpc_proto
 add_library(plugin_grpc_proto
+  ${ctrl_srcs}
+  ${ctrl_hdrs}
   ${grpc_srcs}
   ${grpc_hdrs}
   ${proto_srcs}

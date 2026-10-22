@@ -20,15 +20,20 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 
+#include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "absl/log/initialize.h"
 #include "absl/strings/str_format.h"
 
+#include "grpc_controller.grpc.pb.h"
 #include "tfplugin5.grpc.pb.h"
 
 using grpc::Server;
@@ -36,7 +41,7 @@ using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
 
-ABSL_FLAG(uint16_t, port, 0, "Server port for the service (0 = pick a free port)");
+ABSL_FLAG(uint16_t, port, 0, "Server port for the service (0 = pick a free-port)");
 
 // Minimal implementation of the OpenTofu provider protocol (tfplugin5).
 // It exposes one resource type, "workaround_example", which has no attributes.
@@ -116,11 +121,39 @@ class ProviderServiceImpl final : public tfplugin5::Provider::Service {
   }
 };
 
+// go-plugin's GRPCController: Core calls Shutdown when it is done with the
+// plugin. Without it Core waits ~2 s and then kills the process.
+class ControllerServiceImpl final : public plugin::GRPCController::Service {
+ public:
+  explicit ControllerServiceImpl(std::function<void()> on_shutdown)
+      : on_shutdown_(std::move(on_shutdown)) {}
+
+  Status Shutdown(ServerContext*, const plugin::Empty*, plugin::Empty*) override {
+    on_shutdown_();
+    return Status::OK;
+  }
+
+ private:
+  std::function<void()> on_shutdown_;
+};
+
 void RunServer(uint16_t port) {
   // Loopback only; with port 0 gRPC picks a free port and reports it back.
   std::string server_address = absl::StrFormat("127.0.0.1:%d", port);
   int selected_port = 0;
   ProviderServiceImpl provider_service;
+  std::unique_ptr<Server> server;
+  // Server::Shutdown() waits for running RPCs, including the Shutdown RPC that
+  // triggers it, so it must run on another thread rather than in the handler.
+  std::once_flag shutdown_once;
+  std::thread shutdown_thread;
+  ControllerServiceImpl controller_service([&] {
+    std::call_once(shutdown_once, [&] {
+      shutdown_thread = std::thread([&] {
+        server->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(1));
+      });
+    });
+  });
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -131,8 +164,9 @@ void RunServer(uint16_t port) {
                            &selected_port);
   // Register the provider service through which Core communicates with us.
   builder.RegisterService(&provider_service);
+  builder.RegisterService(&controller_service);
   // Finally assemble the server.
-  std::unique_ptr<Server> server(builder.BuildAndStart());
+  server = builder.BuildAndStart();
   if (!server || selected_port == 0) {
     std::cerr << "Failed to start server on " << server_address << std::endl;
     return;
@@ -145,6 +179,7 @@ void RunServer(uint16_t port) {
   // Wait for the server to shutdown. Note that some other thread must be
   // responsible for shutting down the server for this call to ever return.
   server->Wait();
+  if (shutdown_thread.joinable()) shutdown_thread.join();
 }
 
 int main(int argc, char** argv) {
