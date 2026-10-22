@@ -28,8 +28,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Proto file
-get_filename_component(proto_abs_path "proto/tofu-plugin.proto" ABSOLUTE)
+# OpenTofu provider protocol (tfplugin5)
+get_filename_component(proto_abs_path "proto/tfplugin5.proto" ABSOLUTE)
 get_filename_component(proto_path "${proto_abs_path}" PATH)
 get_filename_component(proto_stem "${proto_abs_path}" NAME_WE)
 
@@ -64,8 +64,9 @@ target_link_libraries(plugin_grpc_proto
   ${_PROTOBUF_LIBPROTOBUF})
 
   ## Tartget name (executable file) is same as the project name (tofu-plugin-cpp)
-  add_executable(${PROJECT_NAME} "src/tofu-plugin.cpp")
-  target_link_libraries(${PROJECT_NAME}
+  set (plugin_exe_name "terraform-provider-workaround")
+  add_executable(${plugin_exe_name} "src/tofu-plugin.cpp")
+  target_link_libraries(${plugin_exe_name}
     plugin_grpc_proto
     absl::check
     absl::flags
